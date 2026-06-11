@@ -1,6 +1,7 @@
 
 Private Function InitRecipeTagGroup() As TagGroup
     Dim recipeTagGroup As TagGroup
+    LogDiagnosticsMessage ("Init function called")
     If recipeTagGroup Is Nothing Then
         Set recipeTagGroup = Application.CreateTagGroup(Me.AreaName)
 
@@ -192,6 +193,7 @@ Private Function InitRecipeTagGroup() As TagGroup
         recipeTagGroup.Add "recipe\Wax_Stirrer_ONSP_CYC_9"
 
     End If
+    LogDiagnosticsMessage ("Init function returning the recipeTagGroup")
     Set InitRecipeTagGroup = recipeTagGroup
 End Function
 'getting tag value by name
@@ -203,18 +205,15 @@ Private Function GetTagVal(tagName As String) As Variant
     GetTagVal = t.Value
 End Function
 
-Private Sub approveBtn_Accepted(PerformerUser As String, PerformerComment As String, ApproveUser As String, ApproveComment As String)
+Private Function CheckDuplicate(ByVal recipeName As String) As Boolean
     Dim conn As ADODB.Connection
+    Dim rs As ADODB.Recordset
     Dim sql As String
-    Dim recipeTagGroup As TagGroup
-    Set recipeTagGroup = InitRecipeTagGroup
-    
-       Dim strRecipeName   As String
-    strRecipeName = GetTagVal("recipe\recipeName")
-     MsgBox "you are approving " & strRecipeName & " recipe"
     
     Set conn = New ADODB.Connection
-
+    Set rs = New ADODB.Recordset
+    
+    ' Open database connection
     conn.Open _
         "Provider=MSOLEDBSQL;" & _
         "Data Source=AAPL-L170\SQLEXPRESS;" & _
@@ -222,54 +221,30 @@ Private Sub approveBtn_Accepted(PerformerUser As String, PerformerComment As Str
         "User ID=sa;" & _
         "Password=sa;" & _
         "TrustServerCertificate=yes;"
-
-    sql = "UPDATE RecipeMaster2 " & _
-          "SET Status = 1, " & _
-          "[Comment] = '" & Replace(PerformerComment, "'", "''") & "', " & _
-          "approvedBy = '" & Replace(PerformerUser, "'", "''") & "', " & _
-          "approvedDate = GETDATE() " & _
-          "WHERE recipeName = '" & Replace(recipeNameInput.Value, "'", "''") & "'"
-
-    conn.Execute sql
+        
+    ' Count how many rows match the recipe name
+    sql = "SELECT COUNT(*) FROM RecipeMaster2 WHERE recipeName = '" & Replace(recipeName, "'", "''") & "'"
     
+    Set rs = conn.Execute(sql)
+    
+    ' If the count is greater than 0, a duplicate exists
+    If rs.Fields(0).Value > 0 Then
+        CheckDuplicate = True
+    Else
+        CheckDuplicate = False
+    End If
+    
+    ' Clean up and close connections
+    rs.Close
     conn.Close
+    Set rs = Nothing
     Set conn = Nothing
-
-End Sub
-
-
- 
-
-Private Function CheckDuplicate() As Boolean
-
-    Dim conn As ADODB.Connection
-    Dim sql As String
-
-    Set conn = New ADODB.Connection
-
-    conn.Open _
-        "Provider=MSOLEDBSQL;" & _
-        "Data Source=AAPL-L170\SQLEXPRESS;" & _
-        "Initial Catalog=vbaLiveProjects;" & _
-        "User ID=sa;" & _
-        "Password=sa;" & _
-        "TrustServerCertificate=yes;"
-
-    sql = "UPDATE RecipeMaster2 " & _
-          "SET Status = 0, " & _
-          "Comment = '" & Replace(PerformerComment, "'", "''") & "' " & _
-          "WHERE recipeName = '" & Replace(recipeNameInput.Value, "'", "''") & "'"
-
-    conn.Execute sql
-
-    conn.Close
-    Set conn = Nothing
-
 End Function
+
 Function renderRecipeParameters(ByVal recipeName As String)
     MsgBox ("Render function for " & recipeName)
     Dim conn
-    Dim Rs
+    Dim rs
     Dim Field, xyz
     Dim ServerName, sqlUsername, sqlPassword, Table, Database As String
     '--------------------------tag group loaded
@@ -291,110 +266,110 @@ Function renderRecipeParameters(ByVal recipeName As String)
     StrQuery = "SELECT * from recipeMaster2 " & _
                "WHERE recipeName = '" & recipeName & "'"
 
-    Set Rs = conn.Execute(StrQuery)
+    Set rs = conn.Execute(StrQuery)
     'MsgBox "Recipe tag found: " & Rs, vbExclamation
     ' ==============================================================
     ' SET TAG VALUES FROM RECORDSET
     ' ==============================================================
-    If Rs.EOF Then
+    If rs.EOF Then
         MsgBox "Recipe not found: " & recipeName, vbExclamation
     Else
-        Do While Not Rs.EOF
+        Do While Not rs.EOF
             ' --- Wax Heat SP TSP ---
             For i = 0 To 9
                 recipeTagGroup.Item("recipe\PID_Parameter_Wax_Heat_SP_TSP_Cyc_" & i).Value = _
-                    Rs("PID_Parameter_Wax_Heat_SP_TSP_Cyc_" & i)
+                    rs("PID_Parameter_Wax_Heat_SP_TSP_Cyc_" & i)
             Next i
 
             ' --- Wax Heat ONSP ---
             For i = 0 To 9
                 recipeTagGroup.Item("recipe\PID_Parameter_Wax_Heat_ONSP_Cyc_" & i).Value = _
-                    Rs("PID_Parameter_Wax_Heat_ONSP_Cyc_" & i)
+                    rs("PID_Parameter_Wax_Heat_ONSP_Cyc_" & i)
             Next i
 
             ' --- Product Heating TSP ---
             For i = 0 To 9
                 recipeTagGroup.Item("recipe\Product_Heating_MFG_Heat_TSP_Cyc_" & i).Value = _
-                    Rs("Product_Heating_MFG_Heat_TSP_Cyc_" & i)
+                    rs("Product_Heating_MFG_Heat_TSP_Cyc_" & i)
             Next i
 
             ' --- Product Heating ONSP ---
             For i = 0 To 9
                 recipeTagGroup.Item("recipe\Product_Heating_MFG_Heat_ONSP_Cyc_" & i).Value = _
-                    Rs("Product_Heating_MFG_Heat_ONSP_Cyc_" & i)
+                    rs("Product_Heating_MFG_Heat_ONSP_Cyc_" & i)
             Next i
 
             ' --- Product Cooling TSP ---
             For i = 0 To 9
                 recipeTagGroup.Item("recipe\Product_Cooling_MFG_Cool_TSP_CycMW1168_" & i).Value = _
-                    Rs("Product_Cooling_MFG_Cool_TSP_CycMW1168_" & i)
+                    rs("Product_Cooling_MFG_Cool_TSP_CycMW1168_" & i)
             Next i
 
             ' --- Water Heating TSP ---
             For i = 0 To 9
                 recipeTagGroup.Item("recipe\Water_Heating_Water_Heat_TSP_Cyc_" & i).Value = _
-                    Rs("Water_Heating_Water_Heat_TSP_Cyc_" & i)
+                    rs("Water_Heating_Water_Heat_TSP_Cyc_" & i)
             Next i
 
             ' --- Water Heating ONSP ---
             For i = 0 To 9
                 recipeTagGroup.Item("recipe\Water_Heating_Water_Heat_ONSP_Cyc_" & i).Value = _
-                    Rs("Water_Heating_Water_Heat_ONSP_Cyc_" & i)
+                    rs("Water_Heating_Water_Heat_ONSP_Cyc_" & i)
             Next i
 
             ' --- Anchor Motor RPM SP ---
             For i = 0 To 9
                 recipeTagGroup.Item("recipe\Motor_Anchor_Mtr_RPM_SP_CYC_" & i).Value = _
-                    Rs("Motor_Anchor_Mtr_RPM_SP_CYC_" & i)
+                    rs("Motor_Anchor_Mtr_RPM_SP_CYC_" & i)
             Next i
 
             ' --- Anchor Motor ONSP ---
             For i = 0 To 9
                 recipeTagGroup.Item("recipe\Anchor_Motor_ONSP_Cyc_" & i).Value = _
-                    Rs("Anchor_Motor_ONSP_Cyc_" & i)
+                    rs("Anchor_Motor_ONSP_Cyc_" & i)
             Next i
 
             ' --- Homogeniser Motor RPM SP ---
             For i = 0 To 9
                 recipeTagGroup.Item("recipe\Motor_Homoginiser_Mtr_RPM_SP_CYC_" & i).Value = _
-                    Rs("Motor_Homoginiser_Mtr_RPM_SP_CYC_" & i)
+                    rs("Motor_Homoginiser_Mtr_RPM_SP_CYC_" & i)
             Next i
 
             ' --- Homogeniser Motor ONSP ---
             For i = 0 To 9
                 recipeTagGroup.Item("recipe\Homogeniser_Motor_ONSP_Cyc_" & i).Value = _
-                    Rs("Homogeniser_Motor_ONSP_Cyc_" & i)
+                    rs("Homogeniser_Motor_ONSP_Cyc_" & i)
             Next i
 
             ' --- Water Stirrer RPM SP ---
             For i = 0 To 9
                 recipeTagGroup.Item("recipe\Motor_Water_Stirrer_Mtr_RPM_SP_CYC_" & i).Value = _
-                    Rs("Motor_Water_Stirrer_Mtr_RPM_SP_CYC_" & i)
+                    rs("Motor_Water_Stirrer_Mtr_RPM_SP_CYC_" & i)
             Next i
 
             ' --- Water Stirrer ONSP ---
             For i = 0 To 9
                 recipeTagGroup.Item("recipe\Water_Heating_Water_Stirr_ONSP_CyC_" & i).Value = _
-                    Rs("Water_Heating_Water_Stirr_ONSP_CyC_" & i)
+                    rs("Water_Heating_Water_Stirr_ONSP_CyC_" & i)
             Next i
 
             ' --- Wax Stirrer RPM SP ---
             For i = 0 To 9
                 recipeTagGroup.Item("recipe\Motor_Wax_Stirrer_Mtr_RPM_SP_CYC_" & i).Value = _
-                    Rs("Motor_Wax_Stirrer_Mtr_RPM_SP_CYC_" & i)
+                    rs("Motor_Wax_Stirrer_Mtr_RPM_SP_CYC_" & i)
             Next i
 
             ' --- Wax Stirrer ONSP ---
             For i = 0 To 9
                 recipeTagGroup.Item("recipe\Wax_Stirrer_ONSP_CYC_" & i).Value = _
-                    Rs("Wax_Stirrer_ONSP_CYC_" & i)
+                    rs("Wax_Stirrer_ONSP_CYC_" & i)
             Next i
 
             ' --- Control Tags ---
-            recipeTagGroup.Item("recipe\status").Value = Rs("status").Value
-            recipeTagGroup.Item("recipe\disable").Value = Rs("disable").Value
+            recipeTagGroup.Item("recipe\status").Value = rs("status").Value
+            recipeTagGroup.Item("recipe\disable").Value = rs("disable").Value
 
-            Rs.MoveNext
+            rs.MoveNext
         Loop
     End If
 
@@ -404,33 +379,26 @@ Function renderRecipeParameters(ByVal recipeName As String)
     ' ==============================================================
     ' CLEANUP
     ' ==============================================================
-    Rs.Close
+    rs.Close
     conn.Close
-    Set Rs = Nothing
+    Set rs = Nothing
     Set conn = Nothing
 
 End Function
 
-Private Sub Display_AnimationStart()
-     Dim recipeTagGroup As TagGroup
+Private Sub approveBtn1_Accepted(PerformerUser As String, PerformerComment As String, ApproverUser As String, ApproverComment As String)
      Set recipeTagGroup = InitRecipeTagGroup
-     'MsgBox ("Recipe value is " & recipeTagGroup.Item("recipe\recipeName").Value)
+    Call updateRecipeStatus(1, recipeTagGroup.Item("recipe\recipeName").Value, PerformerComment, PerformerUser)
 End Sub
 
-Private Sub rejectBtn__Accepted(PerformerUser As String, PerformerComment As String, ApproveUser As String, ApproveComment As String)
+Private Sub updateRecipeStatus(recipeStatus As Integer, recipeName As String, comment As String, PerformerUser As String)
 
-End Sub
-
-
-Private Sub rejectBtn_Accepted(PerformerUser As String, PerformerComment As String, ApproveUser As String, ApproveComment As String)
-       Dim conn As ADODB.Connection
+    Dim conn As ADODB.Connection
     Dim sql As String
     Dim recipeTagGroup As TagGroup
     Set recipeTagGroup = InitRecipeTagGroup
     
-       Dim strRecipeName   As String
-    strRecipeName = GetTagVal("recipe\recipeName")
-     MsgBox "you are rejecting " & strRecipeName & " recipe"
+        
     
     Set conn = New ADODB.Connection
 
@@ -443,28 +411,115 @@ Private Sub rejectBtn_Accepted(PerformerUser As String, PerformerComment As Stri
         "TrustServerCertificate=yes;"
 
     sql = "UPDATE RecipeMaster2 " & _
-      "SET Status = 0, " & _
-      "[Comment] = '" & Replace(PerformerComment, "'", "''") & "', " & _
-      "approvedBy = 'Null', " & _
-      "approvedDate = GETDATE() " & _
-      "WHERE recipeName = '" & Replace(recipeNameInput.Value, "'", "''") & "'"
+          "SET Status = " & recipeStatus & ", " & _
+          "[Comment] = '" & Replace(comment, "'", "''") & "', " & _
+          "approvedBy = '" & Replace(PerformerUser, "'", "''") & "', " & _
+          "approvedDate = GETDATE() " & _
+          "WHERE recipeName = '" & Replace(recipeName, "'", "''") & "'"
 
     conn.Execute sql
-    
+    If recipeStatus Then
+     MsgBox "Recipe Approved SuccessFully"
+    Else
+     MsgBox "Recipe Reject SuccessFully"
+    End If
     conn.Close
     Set conn = Nothing
+
 End Sub
 
-Private Sub saveToSqlBtn_Accepted(PerformerUser As String, PerformerComment As String, ApproveUser As String, ApproveComment As String)
-    
+
+
+Private Sub batchNumberInput_Change()
+
+End Sub
+
+Private Sub disableBtn_Accepted(PerformerUser As String, PerformerComment As String, ApproverUser As String, ApproverComment As String)
+      Dim recipeTagGroup As TagGroup
+     Set recipeTagGroup = InitRecipeTagGroup
+     Call updateRecipeStatusToDisable(3, recipeTagGroup.Item("recipe\recipeName").Value, PerformerComment, PerformerUser)
+End Sub
+Private Sub updateRecipeStatusToDisable(recipeStatus As Integer, recipeName As String, comment As String, PerformerUser As String)
+
+    Dim conn As ADODB.Connection
+    Dim sql As String
     Dim recipeTagGroup As TagGroup
     Set recipeTagGroup = InitRecipeTagGroup
     
-    If CheckDuplicate Then
-        MsgBox "Recipe Already Exists Choose Differen Name"
+        
+    
+    Set conn = New ADODB.Connection
+
+    conn.Open _
+        "Provider=MSOLEDBSQL;" & _
+        "Data Source=AAPL-L170\SQLEXPRESS;" & _
+        "Initial Catalog=vbaLiveProjects;" & _
+        "User ID=sa;" & _
+        "Password=sa;" & _
+        "TrustServerCertificate=yes;"
+
+    sql = "UPDATE RecipeMaster2 " & _
+          "SET Status = " & recipeStatus & ", " & _
+          "[Comment] = '" & Replace(comment, "'", "''") & "', " & _
+          "disabledBy = 'qa', " & _
+          "disablededDate = GETDATE() " & _
+          "WHERE recipeName = '" & Replace(recipeName, "'", "''") & "'"
+          
+          
+         ' sql = "UPDATE RecipeMaster2 " & _
+          "SET Status = " & recipeStatus & ", " & _
+          "[Comment] = '" & Replace(comment, "'", "''") & "' " & _
+          "WHERE recipeName = '" & Replace(recipeName, "'", "''") & "'"
+
+    conn.Execute sql
+     MsgBox "Recipe Disabled SuccessFully"
+    conn.Close
+    Set conn = Nothing
+
+End Sub
+Private Sub Display_AnimationStart()
+     Dim recipeTagGroup As TagGroup
+     Set recipeTagGroup = InitRecipeTagGroup
+     'MsgBox ("Recipe value is " & recipeTagGroup.Item("recipe\recipeName").Value)
+End Sub
+
+'------------------- save sql to text file
+Public Sub SaveTextToFile(ByVal filePath As String, ByVal textData As String)
+
+    On Error GoTo ErrHandler
+
+    Dim fileNum As Integer
+
+    fileNum = FreeFile
+
+    Open filePath For Output As #fileNum
+        Print #fileNum, textData
+    Close #fileNum
+
+    Exit Sub
+
+ErrHandler:
+    MsgBox "Error saving file: " & Err.Description
+End Sub
+
+Private Sub rejectBtn__Accepted(PerformerUser As String, PerformerComment As String, ApproveUser As String, ApproveComment As String)
+
+End Sub
+
+ 
+
+Private Sub saveRecipetoDB(user As String)
+
+LogDiagnosticsMessage ("Save function called")
+    Dim recipeTagGroup As TagGroup
+    Set recipeTagGroup = InitRecipeTagGroup
+    
+    If CheckDuplicate(recipeTagGroup.Item("recipe\recipeName").Value) Then
+        MsgBox "Recipe Already Exists Choose Different Name for the Recipe"
         recipeNameInput.Value = ""
         Exit Sub
     End If
+    
     
     'On Error GoTo ErrHandler
 
@@ -477,7 +532,8 @@ Private Sub saveToSqlBtn_Accepted(PerformerUser As String, PerformerComment As S
         MsgBox "Error: Please Enter Recipe Name", vbCritical, "Missing Data"
         Exit Sub
     End If
-
+    
+    LogDiagnosticsMessage ("Db Connection open")
     ' --- 3. DATABASE CONNECTION ---
     Set conn = New ADODB.Connection
     conn.Open _
@@ -488,61 +544,41 @@ Private Sub saveToSqlBtn_Accepted(PerformerUser As String, PerformerComment As S
         "Password=sa;" & _
         "TrustServerCertificate=yes;"
         
-        'Dim createdByName As String
-        'createdByName = PerformerUser
-     
-           
-    ' --- 4. BUILD THE SQL QUERY ---
-    ' Explicitly added 'productName' back to match your original column structure if needed
-    ' Added 'Me.' prefix to force FactoryTalk to look at the screen elements
-    'sqlQuery = "INSERT INTO RecipeMaster2 (recipeName, " & _
-        "TESTPID_Parameter_Wax_Heat_SP_TSP_Cyc_0, TESTPID_Parameter_Wax_Heat_SP_TSP_Cyc_1, " & _
-        "TESTPID_Parameter_Wax_Heat_SP_TSP_Cyc_2, TESTPID_Parameter_Wax_Heat_SP_TSP_Cyc_3, " & _
-        "TESTPID_Parameter_Wax_Heat_SP_TSP_Cyc_4, TESTPID_Parameter_Wax_Heat_SP_TSP_Cyc_5, " & _
-        "TESTPID_Parameter_Wax_Heat_SP_TSP_Cyc_6, TESTPID_Parameter_Wax_Heat_SP_TSP_Cyc_7, " & _
-        "TESTPID_Parameter_Wax_Heat_SP_TSP_Cyc_8, TESTPID_Parameter_Wax_Heat_SP_TSP_Cyc_9, " & _
-        "TESTPID_Parameter_Wax_Heat_ONSP_Cyc_0, TESTPID_Parameter_Wax_Heat_ONSP_Cyc_1, " & _
-        "TESTPID_Parameter_Wax_Heat_ONSP_Cyc_2, TESTPID_Parameter_Wax_Heat_ONSP_Cyc_3, " & _
-        "TESTPID_Parameter_Wax_Heat_ONSP_Cyc_4, TESTPID_Parameter_Wax_Heat_ONSP_Cyc_5, " & _
-        "TESTPID_Parameter_Wax_Heat_ONSP_Cyc_6, TESTPID_Parameter_Wax_Heat_ONSP_Cyc_7, " & _
-        "TESTPID_Parameter_Wax_Heat_ONSP_Cyc_8, TESTPID_Parameter_Wax_Heat_ONSP_Cyc_9) " & _
-        "VALUES (" & _
-        "'" & recipeNameInput.Value & "', " & _
-        NumericInput1.Value & ", " & NumericInput2.Value & ", " & _
-       NumericInput3.Value & ", " & NumericInput4.Value & ", " & _
-        NumericInput5.Value & ", " & NumericInput6.Value & ", " & _
-        NumericInput7.Value & ", " & NumericInput8.Value & ", " & _
-        NumericInput9.Value & ", " & NumericInput10.Value & ", " & _
-       NumericInput11.Value & ", " & NumericInput11.Value & ", " & _
-       NumericInput12.Value & ", " & NumericInput13.Value & ", " & _
-       NumericInput14.Value & ", " & NumericInput15.Value & ", " & _
-       NumericInput16.Value & ", " & NumericInput17.Value & ", " & _
-       NumericInput18.Value & ", " & NumericInput19.Value & " " & _
-        ")"
-    'save to sql by tag values or hmi tags
-    
+        LogDiagnosticsMessage ("Db Connection made")
+        
     
     ' --- Dummy variables — replace with your actual sources ---
     Dim strRecipeName   As String
-    strRecipeName = GetTagVal("recipe\recipeName")
+    LogDiagnosticsMessage ("GetTagVal function called for recipe\recipeName")
+    strRecipeName = recipeTagGroup.Item("recipe\recipeName").Value
+    LogDiagnosticsMessage ("GetTagVal Returned value for recipe\recipeName")
+    
      If strRecipeName = "" Then
         MsgBox "Please Enter Recipe Name or Press enter after entering name"
         recipeNameInput.Value = ""
         Exit Sub
     End If
     
-    MsgBox "recipe name is from tag : " & strRecipeName
     Dim strBatchNumber  As String
-    strBatchNumber = GetTagVal("recipe\SCADA_DATA_Batch_No")
+    strBatchNumber = recipeTagGroup.Item("recipe\SCADA_DATA_Batch_No").Value
+    
+    
+    If strBatchNumber = "" Then
+        MsgBox "Please Enter BatchNumber or Press enter after entering BatchNumber"
+        batchNumberInput.Value = ""
+        Exit Sub
+    End If
+    
+    'MsgBox "recipe name is from tag : " & strRecipeName
     Dim strCreatedBy    As String
-    strCreatedBy = PerformerUser
+    strCreatedBy = user
 
     ' ==============================================================
     ' COLUMN GROUPS
     ' ==============================================================
 
     Dim colsMeta As String
-    colsMeta = "recipeName, batchNumber, createdBy, createdDate"
+    colsMeta = "recipeName, batchNumber, createdBy, createdDate "
 
     Dim colsWaxHeatTSP As String
     colsWaxHeatTSP = "PID_Parameter_Wax_Heat_SP_TSP_Cyc_0, PID_Parameter_Wax_Heat_SP_TSP_Cyc_1, " & _
@@ -649,6 +685,7 @@ Private Sub saveToSqlBtn_Accepted(PerformerUser As String, PerformerComment As S
                       "Wax_Stirrer_ONSP_CYC_6, Wax_Stirrer_ONSP_CYC_7, " & _
                       "Wax_Stirrer_ONSP_CYC_8, Wax_Stirrer_ONSP_CYC_9"
 
+    LogDiagnosticsMessage ("Concatenation of SQL query")
     ' --- Final COLUMN concatenation ---
     Dim sqlCols As String
     sqlCols = "INSERT INTO RecipeMaster2 (" & _
@@ -668,7 +705,7 @@ Private Sub saveToSqlBtn_Accepted(PerformerUser As String, PerformerComment As S
                   colsWaterStirONSP & ", " & _
                   colsWaxStirRPM & ", " & _
                   colsWaxStirONSP & ") "
-
+    LogDiagnosticsMessage ("sqlCols " & sqlCols)
     ' ==============================================================
     ' VALUE GROUPS  — GetTagVal reads live from HMI TagGroup
 
@@ -679,184 +716,184 @@ Private Sub saveToSqlBtn_Accepted(PerformerUser As String, PerformerComment As S
                 "GETDATE()" '
 
     Dim valsWaxHeatTSP As String
-    valsWaxHeatTSP = GetTagVal("recipe\PID_Parameter_Wax_Heat_SP_TSP_Cyc_0") & ", " & _
-                     GetTagVal("recipe\PID_Parameter_Wax_Heat_SP_TSP_Cyc_1") & ", " & _
-                     GetTagVal("recipe\PID_Parameter_Wax_Heat_SP_TSP_Cyc_2") & ", " & _
-                     GetTagVal("recipe\PID_Parameter_Wax_Heat_SP_TSP_Cyc_3") & ", " & _
-                     GetTagVal("recipe\PID_Parameter_Wax_Heat_SP_TSP_Cyc_4") & ", " & _
-                     GetTagVal("recipe\PID_Parameter_Wax_Heat_SP_TSP_Cyc_5") & ", " & _
-                     GetTagVal("recipe\PID_Parameter_Wax_Heat_SP_TSP_Cyc_6") & ", " & _
-                     GetTagVal("recipe\PID_Parameter_Wax_Heat_SP_TSP_Cyc_7") & ", " & _
-                     GetTagVal("recipe\PID_Parameter_Wax_Heat_SP_TSP_Cyc_8") & ", " & _
-                     GetTagVal("recipe\PID_Parameter_Wax_Heat_SP_TSP_Cyc_9")
+    valsWaxHeatTSP = recipeTagGroup.Item("recipe\PID_Parameter_Wax_Heat_SP_TSP_Cyc_0").Value & ", " & _
+                     recipeTagGroup.Item("recipe\PID_Parameter_Wax_Heat_SP_TSP_Cyc_1").Value & ", " & _
+                     recipeTagGroup.Item("recipe\PID_Parameter_Wax_Heat_SP_TSP_Cyc_2").Value & ", " & _
+                     recipeTagGroup.Item("recipe\PID_Parameter_Wax_Heat_SP_TSP_Cyc_3").Value & ", " & _
+                     recipeTagGroup.Item("recipe\PID_Parameter_Wax_Heat_SP_TSP_Cyc_4").Value & ", " & _
+                     recipeTagGroup.Item("recipe\PID_Parameter_Wax_Heat_SP_TSP_Cyc_5").Value & ", " & _
+                     recipeTagGroup.Item("recipe\PID_Parameter_Wax_Heat_SP_TSP_Cyc_6").Value & ", " & _
+                     recipeTagGroup.Item("recipe\PID_Parameter_Wax_Heat_SP_TSP_Cyc_7").Value & ", " & _
+                     recipeTagGroup.Item("recipe\PID_Parameter_Wax_Heat_SP_TSP_Cyc_8").Value & ", " & _
+                     recipeTagGroup.Item("recipe\PID_Parameter_Wax_Heat_SP_TSP_Cyc_9").Value
 
     Dim valsWaxHeatONSP As String
-    valsWaxHeatONSP = GetTagVal("recipe\PID_Parameter_Wax_Heat_ONSP_Cyc_0") & ", " & _
-                      GetTagVal("recipe\PID_Parameter_Wax_Heat_ONSP_Cyc_1") & ", " & _
-                      GetTagVal("recipe\PID_Parameter_Wax_Heat_ONSP_Cyc_2") & ", " & _
-                      GetTagVal("recipe\PID_Parameter_Wax_Heat_ONSP_Cyc_3") & ", " & _
-                      GetTagVal("recipe\PID_Parameter_Wax_Heat_ONSP_Cyc_4") & ", " & _
-                      GetTagVal("recipe\PID_Parameter_Wax_Heat_ONSP_Cyc_5") & ", " & _
-                      GetTagVal("recipe\PID_Parameter_Wax_Heat_ONSP_Cyc_6") & ", " & _
-                      GetTagVal("recipe\PID_Parameter_Wax_Heat_ONSP_Cyc_7") & ", " & _
-                      GetTagVal("recipe\PID_Parameter_Wax_Heat_ONSP_Cyc_8") & ", " & _
-                      GetTagVal("recipe\PID_Parameter_Wax_Heat_ONSP_Cyc_9")
+    valsWaxHeatONSP = recipeTagGroup.Item("recipe\PID_Parameter_Wax_Heat_ONSP_Cyc_0").Value & ", " & _
+                      recipeTagGroup.Item("recipe\PID_Parameter_Wax_Heat_ONSP_Cyc_1").Value & ", " & _
+                      recipeTagGroup.Item("recipe\PID_Parameter_Wax_Heat_ONSP_Cyc_2").Value & ", " & _
+                      recipeTagGroup.Item("recipe\PID_Parameter_Wax_Heat_ONSP_Cyc_3").Value & ", " & _
+                      recipeTagGroup.Item("recipe\PID_Parameter_Wax_Heat_ONSP_Cyc_4").Value & ", " & _
+                      recipeTagGroup.Item("recipe\PID_Parameter_Wax_Heat_ONSP_Cyc_5").Value & ", " & _
+                      recipeTagGroup.Item("recipe\PID_Parameter_Wax_Heat_ONSP_Cyc_6").Value & ", " & _
+                      recipeTagGroup.Item("recipe\PID_Parameter_Wax_Heat_ONSP_Cyc_7").Value & ", " & _
+                      recipeTagGroup.Item("recipe\PID_Parameter_Wax_Heat_ONSP_Cyc_8").Value & ", " & _
+                      recipeTagGroup.Item("recipe\PID_Parameter_Wax_Heat_ONSP_Cyc_9").Value
 
     Dim valsProdHeatTSP As String
-    valsProdHeatTSP = GetTagVal("recipe\Product_Heating_MFG_Heat_TSP_Cyc_0") & ", " & _
-                      GetTagVal("recipe\Product_Heating_MFG_Heat_TSP_Cyc_1") & ", " & _
-                      GetTagVal("recipe\Product_Heating_MFG_Heat_TSP_Cyc_2") & ", " & _
-                      GetTagVal("recipe\Product_Heating_MFG_Heat_TSP_Cyc_3") & ", " & _
-                      GetTagVal("recipe\Product_Heating_MFG_Heat_TSP_Cyc_4") & ", " & _
-                      GetTagVal("recipe\Product_Heating_MFG_Heat_TSP_Cyc_5") & ", " & _
-                      GetTagVal("recipe\Product_Heating_MFG_Heat_TSP_Cyc_6") & ", " & _
-                      GetTagVal("recipe\Product_Heating_MFG_Heat_TSP_Cyc_7") & ", " & _
-                      GetTagVal("recipe\Product_Heating_MFG_Heat_TSP_Cyc_8") & ", " & _
-                      GetTagVal("recipe\Product_Heating_MFG_Heat_TSP_Cyc_9")
+    valsProdHeatTSP = recipeTagGroup.Item("recipe\Product_Heating_MFG_Heat_TSP_Cyc_0").Value & ", " & _
+                      recipeTagGroup.Item("recipe\Product_Heating_MFG_Heat_TSP_Cyc_1").Value & ", " & _
+                      recipeTagGroup.Item("recipe\Product_Heating_MFG_Heat_TSP_Cyc_2").Value & ", " & _
+                      recipeTagGroup.Item("recipe\Product_Heating_MFG_Heat_TSP_Cyc_3").Value & ", " & _
+                      recipeTagGroup.Item("recipe\Product_Heating_MFG_Heat_TSP_Cyc_4").Value & ", " & _
+                      recipeTagGroup.Item("recipe\Product_Heating_MFG_Heat_TSP_Cyc_5").Value & ", " & _
+                      recipeTagGroup.Item("recipe\Product_Heating_MFG_Heat_TSP_Cyc_6").Value & ", " & _
+                      recipeTagGroup.Item("recipe\Product_Heating_MFG_Heat_TSP_Cyc_7").Value & ", " & _
+                      recipeTagGroup.Item("recipe\Product_Heating_MFG_Heat_TSP_Cyc_8").Value & ", " & _
+                      recipeTagGroup.Item("recipe\Product_Heating_MFG_Heat_TSP_Cyc_9").Value
 
     Dim valsProdHeatONSP As String
-    valsProdHeatONSP = GetTagVal("recipe\Product_Heating_MFG_Heat_ONSP_Cyc_0") & ", " & _
-                       GetTagVal("recipe\Product_Heating_MFG_Heat_ONSP_Cyc_1") & ", " & _
-                       GetTagVal("recipe\Product_Heating_MFG_Heat_ONSP_Cyc_2") & ", " & _
-                       GetTagVal("recipe\Product_Heating_MFG_Heat_ONSP_Cyc_3") & ", " & _
-                       GetTagVal("recipe\Product_Heating_MFG_Heat_ONSP_Cyc_4") & ", " & _
-                       GetTagVal("recipe\Product_Heating_MFG_Heat_ONSP_Cyc_5") & ", " & _
-                       GetTagVal("recipe\Product_Heating_MFG_Heat_ONSP_Cyc_6") & ", " & _
-                       GetTagVal("recipe\Product_Heating_MFG_Heat_ONSP_Cyc_7") & ", " & _
-                       GetTagVal("recipe\Product_Heating_MFG_Heat_ONSP_Cyc_8") & ", " & _
-                       GetTagVal("recipe\Product_Heating_MFG_Heat_ONSP_Cyc_9")
+    valsProdHeatONSP = recipeTagGroup.Item("recipe\Product_Heating_MFG_Heat_ONSP_Cyc_0").Value & ", " & _
+                       recipeTagGroup.Item("recipe\Product_Heating_MFG_Heat_ONSP_Cyc_1").Value & ", " & _
+                       recipeTagGroup.Item("recipe\Product_Heating_MFG_Heat_ONSP_Cyc_2").Value & ", " & _
+                       recipeTagGroup.Item("recipe\Product_Heating_MFG_Heat_ONSP_Cyc_3").Value & ", " & _
+                       recipeTagGroup.Item("recipe\Product_Heating_MFG_Heat_ONSP_Cyc_4").Value & ", " & _
+                       recipeTagGroup.Item("recipe\Product_Heating_MFG_Heat_ONSP_Cyc_5").Value & ", " & _
+                       recipeTagGroup.Item("recipe\Product_Heating_MFG_Heat_ONSP_Cyc_6").Value & ", " & _
+                       recipeTagGroup.Item("recipe\Product_Heating_MFG_Heat_ONSP_Cyc_7").Value & ", " & _
+                       recipeTagGroup.Item("recipe\Product_Heating_MFG_Heat_ONSP_Cyc_8").Value & ", " & _
+                       recipeTagGroup.Item("recipe\Product_Heating_MFG_Heat_ONSP_Cyc_9").Value
 
     Dim valsProdCoolTSP As String
-    valsProdCoolTSP = GetTagVal("recipe\Product_Cooling_MFG_Cool_TSP_CycMW1168_0") & ", " & _
-                      GetTagVal("recipe\Product_Cooling_MFG_Cool_TSP_CycMW1168_1") & ", " & _
-                      GetTagVal("recipe\Product_Cooling_MFG_Cool_TSP_CycMW1168_2") & ", " & _
-                      GetTagVal("recipe\Product_Cooling_MFG_Cool_TSP_CycMW1168_3") & ", " & _
-                      GetTagVal("recipe\Product_Cooling_MFG_Cool_TSP_CycMW1168_4") & ", " & _
-                      GetTagVal("recipe\Product_Cooling_MFG_Cool_TSP_CycMW1168_5") & ", " & _
-                      GetTagVal("recipe\Product_Cooling_MFG_Cool_TSP_CycMW1168_6") & ", " & _
-                      GetTagVal("recipe\Product_Cooling_MFG_Cool_TSP_CycMW1168_7") & ", " & _
-                      GetTagVal("recipe\Product_Cooling_MFG_Cool_TSP_CycMW1168_8") & ", " & _
-                      GetTagVal("recipe\Product_Cooling_MFG_Cool_TSP_CycMW1168_9")
+    valsProdCoolTSP = recipeTagGroup.Item("recipe\Product_Cooling_MFG_Cool_TSP_CycMW1168_0").Value & ", " & _
+                      recipeTagGroup.Item("recipe\Product_Cooling_MFG_Cool_TSP_CycMW1168_1").Value & ", " & _
+                      recipeTagGroup.Item("recipe\Product_Cooling_MFG_Cool_TSP_CycMW1168_2").Value & ", " & _
+                      recipeTagGroup.Item("recipe\Product_Cooling_MFG_Cool_TSP_CycMW1168_3").Value & ", " & _
+                      recipeTagGroup.Item("recipe\Product_Cooling_MFG_Cool_TSP_CycMW1168_4").Value & ", " & _
+                      recipeTagGroup.Item("recipe\Product_Cooling_MFG_Cool_TSP_CycMW1168_5").Value & ", " & _
+                      recipeTagGroup.Item("recipe\Product_Cooling_MFG_Cool_TSP_CycMW1168_6").Value & ", " & _
+                      recipeTagGroup.Item("recipe\Product_Cooling_MFG_Cool_TSP_CycMW1168_7").Value & ", " & _
+                      recipeTagGroup.Item("recipe\Product_Cooling_MFG_Cool_TSP_CycMW1168_8").Value & ", " & _
+                      recipeTagGroup.Item("recipe\Product_Cooling_MFG_Cool_TSP_CycMW1168_9").Value
 
     Dim valsWaterHeatTSP As String
-    valsWaterHeatTSP = GetTagVal("recipe\Water_Heating_Water_Heat_TSP_Cyc_0") & ", " & _
-                       GetTagVal("recipe\Water_Heating_Water_Heat_TSP_Cyc_1") & ", " & _
-                       GetTagVal("recipe\Water_Heating_Water_Heat_TSP_Cyc_2") & ", " & _
-                       GetTagVal("recipe\Water_Heating_Water_Heat_TSP_Cyc_3") & ", " & _
-                       GetTagVal("recipe\Water_Heating_Water_Heat_TSP_Cyc_4") & ", " & _
-                       GetTagVal("recipe\Water_Heating_Water_Heat_TSP_Cyc_5") & ", " & _
-                       GetTagVal("recipe\Water_Heating_Water_Heat_TSP_Cyc_6") & ", " & _
-                       GetTagVal("recipe\Water_Heating_Water_Heat_TSP_Cyc_7") & ", " & _
-                       GetTagVal("recipe\Water_Heating_Water_Heat_TSP_Cyc_8") & ", " & _
-                       GetTagVal("recipe\Water_Heating_Water_Heat_TSP_Cyc_9")
+    valsWaterHeatTSP = recipeTagGroup.Item("recipe\Water_Heating_Water_Heat_TSP_Cyc_0").Value & ", " & _
+                       recipeTagGroup.Item("recipe\Water_Heating_Water_Heat_TSP_Cyc_1").Value & ", " & _
+                       recipeTagGroup.Item("recipe\Water_Heating_Water_Heat_TSP_Cyc_2").Value & ", " & _
+                       recipeTagGroup.Item("recipe\Water_Heating_Water_Heat_TSP_Cyc_3").Value & ", " & _
+                       recipeTagGroup.Item("recipe\Water_Heating_Water_Heat_TSP_Cyc_4").Value & ", " & _
+                       recipeTagGroup.Item("recipe\Water_Heating_Water_Heat_TSP_Cyc_5").Value & ", " & _
+                       recipeTagGroup.Item("recipe\Water_Heating_Water_Heat_TSP_Cyc_6").Value & ", " & _
+                       recipeTagGroup.Item("recipe\Water_Heating_Water_Heat_TSP_Cyc_7").Value & ", " & _
+                       recipeTagGroup.Item("recipe\Water_Heating_Water_Heat_TSP_Cyc_8").Value & ", " & _
+                       recipeTagGroup.Item("recipe\Water_Heating_Water_Heat_TSP_Cyc_9").Value
 
     Dim valsWaterHeatONSP As String
-    valsWaterHeatONSP = GetTagVal("recipe\Water_Heating_Water_Heat_ONSP_Cyc_0") & ", " & _
-                        GetTagVal("recipe\Water_Heating_Water_Heat_ONSP_Cyc_1") & ", " & _
-                        GetTagVal("recipe\Water_Heating_Water_Heat_ONSP_Cyc_2") & ", " & _
-                        GetTagVal("recipe\Water_Heating_Water_Heat_ONSP_Cyc_3") & ", " & _
-                        GetTagVal("recipe\Water_Heating_Water_Heat_ONSP_Cyc_4") & ", " & _
-                        GetTagVal("recipe\Water_Heating_Water_Heat_ONSP_Cyc_5") & ", " & _
-                        GetTagVal("recipe\Water_Heating_Water_Heat_ONSP_Cyc_6") & ", " & _
-                        GetTagVal("recipe\Water_Heating_Water_Heat_ONSP_Cyc_7") & ", " & _
-                        GetTagVal("recipe\Water_Heating_Water_Heat_ONSP_Cyc_8") & ", " & _
-                        GetTagVal("recipe\Water_Heating_Water_Heat_ONSP_Cyc_9")
+    valsWaterHeatONSP = recipeTagGroup.Item("recipe\Water_Heating_Water_Heat_ONSP_Cyc_0").Value & ", " & _
+                        recipeTagGroup.Item("recipe\Water_Heating_Water_Heat_ONSP_Cyc_1").Value & ", " & _
+                        recipeTagGroup.Item("recipe\Water_Heating_Water_Heat_ONSP_Cyc_2").Value & ", " & _
+                        recipeTagGroup.Item("recipe\Water_Heating_Water_Heat_ONSP_Cyc_3").Value & ", " & _
+                        recipeTagGroup.Item("recipe\Water_Heating_Water_Heat_ONSP_Cyc_4").Value & ", " & _
+                        recipeTagGroup.Item("recipe\Water_Heating_Water_Heat_ONSP_Cyc_5").Value & ", " & _
+                        recipeTagGroup.Item("recipe\Water_Heating_Water_Heat_ONSP_Cyc_6").Value & ", " & _
+                        recipeTagGroup.Item("recipe\Water_Heating_Water_Heat_ONSP_Cyc_7").Value & ", " & _
+                        recipeTagGroup.Item("recipe\Water_Heating_Water_Heat_ONSP_Cyc_8").Value & ", " & _
+                        recipeTagGroup.Item("recipe\Water_Heating_Water_Heat_ONSP_Cyc_9").Value
 
     Dim valsAnchorRPM As String
-    valsAnchorRPM = GetTagVal("recipe\Motor_Anchor_Mtr_RPM_SP_CYC_0") & ", " & _
-                    GetTagVal("recipe\Motor_Anchor_Mtr_RPM_SP_CYC_1") & ", " & _
-                    GetTagVal("recipe\Motor_Anchor_Mtr_RPM_SP_CYC_2") & ", " & _
-                    GetTagVal("recipe\Motor_Anchor_Mtr_RPM_SP_CYC_3") & ", " & _
-                    GetTagVal("recipe\Motor_Anchor_Mtr_RPM_SP_CYC_4") & ", " & _
-                    GetTagVal("recipe\Motor_Anchor_Mtr_RPM_SP_CYC_5") & ", " & _
-                    GetTagVal("recipe\Motor_Anchor_Mtr_RPM_SP_CYC_6") & ", " & _
-                    GetTagVal("recipe\Motor_Anchor_Mtr_RPM_SP_CYC_7") & ", " & _
-                    GetTagVal("recipe\Motor_Anchor_Mtr_RPM_SP_CYC_8") & ", " & _
-                    GetTagVal("recipe\Motor_Anchor_Mtr_RPM_SP_CYC_9")
+    valsAnchorRPM = recipeTagGroup.Item("recipe\Motor_Anchor_Mtr_RPM_SP_CYC_0").Value & ", " & _
+                    recipeTagGroup.Item("recipe\Motor_Anchor_Mtr_RPM_SP_CYC_1").Value & ", " & _
+                    recipeTagGroup.Item("recipe\Motor_Anchor_Mtr_RPM_SP_CYC_2").Value & ", " & _
+                    recipeTagGroup.Item("recipe\Motor_Anchor_Mtr_RPM_SP_CYC_3").Value & ", " & _
+                    recipeTagGroup.Item("recipe\Motor_Anchor_Mtr_RPM_SP_CYC_4").Value & ", " & _
+                    recipeTagGroup.Item("recipe\Motor_Anchor_Mtr_RPM_SP_CYC_5").Value & ", " & _
+                    recipeTagGroup.Item("recipe\Motor_Anchor_Mtr_RPM_SP_CYC_6").Value & ", " & _
+                    recipeTagGroup.Item("recipe\Motor_Anchor_Mtr_RPM_SP_CYC_7").Value & ", " & _
+                    recipeTagGroup.Item("recipe\Motor_Anchor_Mtr_RPM_SP_CYC_8").Value & ", " & _
+                    recipeTagGroup.Item("recipe\Motor_Anchor_Mtr_RPM_SP_CYC_9").Value
 
     Dim valsAnchorONSP As String
-    valsAnchorONSP = GetTagVal("recipe\Anchor_Motor_ONSP_Cyc_0") & ", " & _
-                     GetTagVal("recipe\Anchor_Motor_ONSP_Cyc_1") & ", " & _
-                     GetTagVal("recipe\Anchor_Motor_ONSP_Cyc_2") & ", " & _
-                     GetTagVal("recipe\Anchor_Motor_ONSP_Cyc_3") & ", " & _
-                     GetTagVal("recipe\Anchor_Motor_ONSP_Cyc_4") & ", " & _
-                     GetTagVal("recipe\Anchor_Motor_ONSP_Cyc_5") & ", " & _
-                     GetTagVal("recipe\Anchor_Motor_ONSP_Cyc_6") & ", " & _
-                     GetTagVal("recipe\Anchor_Motor_ONSP_Cyc_7") & ", " & _
-                     GetTagVal("recipe\Anchor_Motor_ONSP_Cyc_8") & ", " & _
-                     GetTagVal("recipe\Anchor_Motor_ONSP_Cyc_9")
+    valsAnchorONSP = recipeTagGroup.Item("recipe\Anchor_Motor_ONSP_Cyc_0").Value & ", " & _
+                     recipeTagGroup.Item("recipe\Anchor_Motor_ONSP_Cyc_1").Value & ", " & _
+                     recipeTagGroup.Item("recipe\Anchor_Motor_ONSP_Cyc_2").Value & ", " & _
+                     recipeTagGroup.Item("recipe\Anchor_Motor_ONSP_Cyc_3").Value & ", " & _
+                     recipeTagGroup.Item("recipe\Anchor_Motor_ONSP_Cyc_4").Value & ", " & _
+                     recipeTagGroup.Item("recipe\Anchor_Motor_ONSP_Cyc_5").Value & ", " & _
+                     recipeTagGroup.Item("recipe\Anchor_Motor_ONSP_Cyc_6").Value & ", " & _
+                     recipeTagGroup.Item("recipe\Anchor_Motor_ONSP_Cyc_7").Value & ", " & _
+                     recipeTagGroup.Item("recipe\Anchor_Motor_ONSP_Cyc_8").Value & ", " & _
+                     recipeTagGroup.Item("recipe\Anchor_Motor_ONSP_Cyc_9").Value
 
     Dim valsHomogRPM As String
-    valsHomogRPM = GetTagVal("recipe\Motor_Homoginiser_Mtr_RPM_SP_CYC_0") & ", " & _
-                   GetTagVal("recipe\Motor_Homoginiser_Mtr_RPM_SP_CYC_1") & ", " & _
-                   GetTagVal("recipe\Motor_Homoginiser_Mtr_RPM_SP_CYC_2") & ", " & _
-                   GetTagVal("recipe\Motor_Homoginiser_Mtr_RPM_SP_CYC_3") & ", " & _
-                   GetTagVal("recipe\Motor_Homoginiser_Mtr_RPM_SP_CYC_4") & ", " & _
-                   GetTagVal("recipe\Motor_Homoginiser_Mtr_RPM_SP_CYC_5") & ", " & _
-                   GetTagVal("recipe\Motor_Homoginiser_Mtr_RPM_SP_CYC_6") & ", " & _
-                   GetTagVal("recipe\Motor_Homoginiser_Mtr_RPM_SP_CYC_7") & ", " & _
-                   GetTagVal("recipe\Motor_Homoginiser_Mtr_RPM_SP_CYC_8") & ", " & _
-                   GetTagVal("recipe\Motor_Homoginiser_Mtr_RPM_SP_CYC_9")
+    valsHomogRPM = recipeTagGroup.Item("recipe\Motor_Homoginiser_Mtr_RPM_SP_CYC_0").Value & ", " & _
+                   recipeTagGroup.Item("recipe\Motor_Homoginiser_Mtr_RPM_SP_CYC_1").Value & ", " & _
+                   recipeTagGroup.Item("recipe\Motor_Homoginiser_Mtr_RPM_SP_CYC_2").Value & ", " & _
+                   recipeTagGroup.Item("recipe\Motor_Homoginiser_Mtr_RPM_SP_CYC_3").Value & ", " & _
+                   recipeTagGroup.Item("recipe\Motor_Homoginiser_Mtr_RPM_SP_CYC_4").Value & ", " & _
+                   recipeTagGroup.Item("recipe\Motor_Homoginiser_Mtr_RPM_SP_CYC_5").Value & ", " & _
+                   recipeTagGroup.Item("recipe\Motor_Homoginiser_Mtr_RPM_SP_CYC_6").Value & ", " & _
+                   recipeTagGroup.Item("recipe\Motor_Homoginiser_Mtr_RPM_SP_CYC_7").Value & ", " & _
+                   recipeTagGroup.Item("recipe\Motor_Homoginiser_Mtr_RPM_SP_CYC_8").Value & ", " & _
+                   recipeTagGroup.Item("recipe\Motor_Homoginiser_Mtr_RPM_SP_CYC_9").Value
 
     Dim valsHomogONSP As String
-    valsHomogONSP = GetTagVal("recipe\Homogeniser_Motor_ONSP_Cyc_0") & ", " & _
-                    GetTagVal("recipe\Homogeniser_Motor_ONSP_Cyc_1") & ", " & _
-                    GetTagVal("recipe\Homogeniser_Motor_ONSP_Cyc_2") & ", " & _
-                    GetTagVal("recipe\Homogeniser_Motor_ONSP_Cyc_3") & ", " & _
-                    GetTagVal("recipe\Homogeniser_Motor_ONSP_Cyc_4") & ", " & _
-                    GetTagVal("recipe\Homogeniser_Motor_ONSP_Cyc_5") & ", " & _
-                    GetTagVal("recipe\Homogeniser_Motor_ONSP_Cyc_6") & ", " & _
-                    GetTagVal("recipe\Homogeniser_Motor_ONSP_Cyc_7") & ", " & _
-                    GetTagVal("recipe\Homogeniser_Motor_ONSP_Cyc_8") & ", " & _
-                    GetTagVal("recipe\Homogeniser_Motor_ONSP_Cyc_9")
+    valsHomogONSP = recipeTagGroup.Item("recipe\Homogeniser_Motor_ONSP_Cyc_0").Value & ", " & _
+                    recipeTagGroup.Item("recipe\Homogeniser_Motor_ONSP_Cyc_1").Value & ", " & _
+                    recipeTagGroup.Item("recipe\Homogeniser_Motor_ONSP_Cyc_2").Value & ", " & _
+                    recipeTagGroup.Item("recipe\Homogeniser_Motor_ONSP_Cyc_3").Value & ", " & _
+                    recipeTagGroup.Item("recipe\Homogeniser_Motor_ONSP_Cyc_4").Value & ", " & _
+                    recipeTagGroup.Item("recipe\Homogeniser_Motor_ONSP_Cyc_5").Value & ", " & _
+                    recipeTagGroup.Item("recipe\Homogeniser_Motor_ONSP_Cyc_6").Value & ", " & _
+                    recipeTagGroup.Item("recipe\Homogeniser_Motor_ONSP_Cyc_7").Value & ", " & _
+                    recipeTagGroup.Item("recipe\Homogeniser_Motor_ONSP_Cyc_8").Value & ", " & _
+                    recipeTagGroup.Item("recipe\Homogeniser_Motor_ONSP_Cyc_9").Value
 
     Dim valsWaterStirRPM As String
-    valsWaterStirRPM = GetTagVal("recipe\Motor_Water_Stirrer_Mtr_RPM_SP_CYC_0") & ", " & _
-                       GetTagVal("recipe\Motor_Water_Stirrer_Mtr_RPM_SP_CYC_1") & ", " & _
-                       GetTagVal("recipe\Motor_Water_Stirrer_Mtr_RPM_SP_CYC_2") & ", " & _
-                       GetTagVal("recipe\Motor_Water_Stirrer_Mtr_RPM_SP_CYC_3") & ", " & _
-                       GetTagVal("recipe\Motor_Water_Stirrer_Mtr_RPM_SP_CYC_4") & ", " & _
-                       GetTagVal("recipe\Motor_Water_Stirrer_Mtr_RPM_SP_CYC_5") & ", " & _
-                       GetTagVal("recipe\Motor_Water_Stirrer_Mtr_RPM_SP_CYC_6") & ", " & _
-                       GetTagVal("recipe\Motor_Water_Stirrer_Mtr_RPM_SP_CYC_7") & ", " & _
-                       GetTagVal("recipe\Motor_Water_Stirrer_Mtr_RPM_SP_CYC_8") & ", " & _
-                       GetTagVal("recipe\Motor_Water_Stirrer_Mtr_RPM_SP_CYC_9")
+    valsWaterStirRPM = recipeTagGroup.Item("recipe\Motor_Water_Stirrer_Mtr_RPM_SP_CYC_0").Value & ", " & _
+                       recipeTagGroup.Item("recipe\Motor_Water_Stirrer_Mtr_RPM_SP_CYC_1").Value & ", " & _
+                       recipeTagGroup.Item("recipe\Motor_Water_Stirrer_Mtr_RPM_SP_CYC_2").Value & ", " & _
+                       recipeTagGroup.Item("recipe\Motor_Water_Stirrer_Mtr_RPM_SP_CYC_3").Value & ", " & _
+                       recipeTagGroup.Item("recipe\Motor_Water_Stirrer_Mtr_RPM_SP_CYC_4").Value & ", " & _
+                       recipeTagGroup.Item("recipe\Motor_Water_Stirrer_Mtr_RPM_SP_CYC_5").Value & ", " & _
+                       recipeTagGroup.Item("recipe\Motor_Water_Stirrer_Mtr_RPM_SP_CYC_6").Value & ", " & _
+                       recipeTagGroup.Item("recipe\Motor_Water_Stirrer_Mtr_RPM_SP_CYC_7").Value & ", " & _
+                       recipeTagGroup.Item("recipe\Motor_Water_Stirrer_Mtr_RPM_SP_CYC_8").Value & ", " & _
+                       recipeTagGroup.Item("recipe\Motor_Water_Stirrer_Mtr_RPM_SP_CYC_9").Value
 
     Dim valsWaterStirONSP As String
-    valsWaterStirONSP = GetTagVal("recipe\Water_Heating_Water_Stirr_ONSP_CyC_0") & ", " & _
-                        GetTagVal("recipe\Water_Heating_Water_Stirr_ONSP_CyC_1") & ", " & _
-                        GetTagVal("recipe\Water_Heating_Water_Stirr_ONSP_CyC_2") & ", " & _
-                        GetTagVal("recipe\Water_Heating_Water_Stirr_ONSP_CyC_3") & ", " & _
-                        GetTagVal("recipe\Water_Heating_Water_Stirr_ONSP_CyC_4") & ", " & _
-                        GetTagVal("recipe\Water_Heating_Water_Stirr_ONSP_CyC_5") & ", " & _
-                        GetTagVal("recipe\Water_Heating_Water_Stirr_ONSP_CyC_6") & ", " & _
-                        GetTagVal("recipe\Water_Heating_Water_Stirr_ONSP_CyC_7") & ", " & _
-                        GetTagVal("recipe\Water_Heating_Water_Stirr_ONSP_CyC_8") & ", " & _
-                        GetTagVal("recipe\Water_Heating_Water_Stirr_ONSP_CyC_9")
+    valsWaterStirONSP = recipeTagGroup.Item("recipe\Water_Heating_Water_Stirr_ONSP_CyC_0").Value & ", " & _
+                        recipeTagGroup.Item("recipe\Water_Heating_Water_Stirr_ONSP_CyC_1").Value & ", " & _
+                        recipeTagGroup.Item("recipe\Water_Heating_Water_Stirr_ONSP_CyC_2").Value & ", " & _
+                        recipeTagGroup.Item("recipe\Water_Heating_Water_Stirr_ONSP_CyC_3").Value & ", " & _
+                        recipeTagGroup.Item("recipe\Water_Heating_Water_Stirr_ONSP_CyC_4").Value & ", " & _
+                        recipeTagGroup.Item("recipe\Water_Heating_Water_Stirr_ONSP_CyC_5").Value & ", " & _
+                        recipeTagGroup.Item("recipe\Water_Heating_Water_Stirr_ONSP_CyC_6").Value & ", " & _
+                        recipeTagGroup.Item("recipe\Water_Heating_Water_Stirr_ONSP_CyC_7").Value & ", " & _
+                        recipeTagGroup.Item("recipe\Water_Heating_Water_Stirr_ONSP_CyC_8").Value & ", " & _
+                        recipeTagGroup.Item("recipe\Water_Heating_Water_Stirr_ONSP_CyC_9").Value
 
     Dim valsWaxStirRPM As String
-    valsWaxStirRPM = GetTagVal("recipe\Motor_Wax_Stirrer_Mtr_RPM_SP_CYC_0") & ", " & _
-                     GetTagVal("recipe\Motor_Wax_Stirrer_Mtr_RPM_SP_CYC_1") & ", " & _
-                     GetTagVal("recipe\Motor_Wax_Stirrer_Mtr_RPM_SP_CYC_2") & ", " & _
-                     GetTagVal("recipe\Motor_Wax_Stirrer_Mtr_RPM_SP_CYC_3") & ", " & _
-                     GetTagVal("recipe\Motor_Wax_Stirrer_Mtr_RPM_SP_CYC_4") & ", " & _
-                     GetTagVal("recipe\Motor_Wax_Stirrer_Mtr_RPM_SP_CYC_5") & ", " & _
-                     GetTagVal("recipe\Motor_Wax_Stirrer_Mtr_RPM_SP_CYC_6") & ", " & _
-                     GetTagVal("recipe\Motor_Wax_Stirrer_Mtr_RPM_SP_CYC_7") & ", " & _
-                     GetTagVal("recipe\Motor_Wax_Stirrer_Mtr_RPM_SP_CYC_8") & ", " & _
-                     GetTagVal("recipe\Motor_Wax_Stirrer_Mtr_RPM_SP_CYC_9")
+    valsWaxStirRPM = recipeTagGroup.Item("recipe\Motor_Wax_Stirrer_Mtr_RPM_SP_CYC_0").Value & ", " & _
+                     recipeTagGroup.Item("recipe\Motor_Wax_Stirrer_Mtr_RPM_SP_CYC_1").Value & ", " & _
+                     recipeTagGroup.Item("recipe\Motor_Wax_Stirrer_Mtr_RPM_SP_CYC_2").Value & ", " & _
+                     recipeTagGroup.Item("recipe\Motor_Wax_Stirrer_Mtr_RPM_SP_CYC_3").Value & ", " & _
+                     recipeTagGroup.Item("recipe\Motor_Wax_Stirrer_Mtr_RPM_SP_CYC_4").Value & ", " & _
+                     recipeTagGroup.Item("recipe\Motor_Wax_Stirrer_Mtr_RPM_SP_CYC_5").Value & ", " & _
+                     recipeTagGroup.Item("recipe\Motor_Wax_Stirrer_Mtr_RPM_SP_CYC_6").Value & ", " & _
+                     recipeTagGroup.Item("recipe\Motor_Wax_Stirrer_Mtr_RPM_SP_CYC_7").Value & ", " & _
+                     recipeTagGroup.Item("recipe\Motor_Wax_Stirrer_Mtr_RPM_SP_CYC_8").Value & ", " & _
+                     recipeTagGroup.Item("recipe\Motor_Wax_Stirrer_Mtr_RPM_SP_CYC_9").Value
 
     Dim valsWaxStirONSP As String
-    valsWaxStirONSP = GetTagVal("recipe\Wax_Stirrer_ONSP_CYC_0") & ", " & _
-                      GetTagVal("recipe\Wax_Stirrer_ONSP_CYC_1") & ", " & _
-                      GetTagVal("recipe\Wax_Stirrer_ONSP_CYC_2") & ", " & _
-                      GetTagVal("recipe\Wax_Stirrer_ONSP_CYC_3") & ", " & _
-                      GetTagVal("recipe\Wax_Stirrer_ONSP_CYC_4") & ", " & _
-                      GetTagVal("recipe\Wax_Stirrer_ONSP_CYC_5") & ", " & _
-                      GetTagVal("recipe\Wax_Stirrer_ONSP_CYC_6") & ", " & _
-                      GetTagVal("recipe\Wax_Stirrer_ONSP_CYC_7") & ", " & _
-                      GetTagVal("recipe\Wax_Stirrer_ONSP_CYC_8") & ", " & _
-                      GetTagVal("recipe\Wax_Stirrer_ONSP_CYC_9")
+    valsWaxStirONSP = recipeTagGroup.Item("recipe\Wax_Stirrer_ONSP_CYC_0").Value & ", " & _
+                      recipeTagGroup.Item("recipe\Wax_Stirrer_ONSP_CYC_1").Value & ", " & _
+                      recipeTagGroup.Item("recipe\Wax_Stirrer_ONSP_CYC_2").Value & ", " & _
+                      recipeTagGroup.Item("recipe\Wax_Stirrer_ONSP_CYC_3").Value & ", " & _
+                      recipeTagGroup.Item("recipe\Wax_Stirrer_ONSP_CYC_4").Value & ", " & _
+                      recipeTagGroup.Item("recipe\Wax_Stirrer_ONSP_CYC_5").Value & ", " & _
+                      recipeTagGroup.Item("recipe\Wax_Stirrer_ONSP_CYC_6").Value & ", " & _
+                      recipeTagGroup.Item("recipe\Wax_Stirrer_ONSP_CYC_7").Value & ", " & _
+                      recipeTagGroup.Item("recipe\Wax_Stirrer_ONSP_CYC_8").Value & ", " & _
+                      recipeTagGroup.Item("recipe\Wax_Stirrer_ONSP_CYC_9").Value
 
     ' --- Final VALUES concatenation ---
     Dim sqlVals As String
@@ -880,12 +917,14 @@ Private Sub saveToSqlBtn_Accepted(PerformerUser As String, PerformerComment As S
 
     ' ==============================================================
     ' EXECUTE
-
-    sqlQuery = sqlCols & sqlVals
-
+     LogDiagnosticsMessage ("Concatenation end of SQL query")
+     
+     LogDiagnosticsMessage ("sqlVals " & sqlVals)
+     sqlQuery = sqlCols & sqlVals
+     LogDiagnosticsMessage ("SQL query built successfully")
 
           'MsgBox (sqlQuery)
-    LogDiagnosticsMessage (sqlQuery)
+    'LogDiagnosticsMessage (sqlQuery)
     
 
     ' --- 5. EXECUTE AND CLEANUP ---
@@ -909,12 +948,32 @@ ErrHandler:
 End Sub
 
 
-Private Sub updateBtn_Released()
-       updateToSql
+ 
+
+Private Sub NumericInput151_Change()
+
 End Sub
 
-Private Sub updateToSql()
-       
+Private Sub rejectBtn1_Accepted(PerformerUser As String, PerformerComment As String, ApproverUser As String, ApproverComment As String)
+    Set recipeTagGroup = InitRecipeTagGroup
+    Call updateRecipeStatus(0, recipeTagGroup.Item("recipe\recipeName").Value, PerformerComment, PerformerUser)
+End Sub
+
+Private Sub rejectBtn1_Released()
+
+End Sub
+
+Private Sub saveToSqlBtn1_Accepted(PerformerUser As String, PerformerComment As String, ApproverUser As String, ApproverComment As String)
+    Call saveRecipetoDB(PerformerUser)
+
+End Sub
+
+ 
+ 
+
+Private Sub updateRecipetoDB(user As String, comment As String)
+
+    LogDiagnosticsMessage ("Update recipe called by " & user)
     Dim conn       As ADODB.Connection
     Dim sqlQuery   As String
     Dim i          As Integer
@@ -932,7 +991,7 @@ Private Sub updateToSql()
     
        Dim strRecipeName   As String
     strRecipeName = GetTagVal("recipe\recipeName")
-     MsgBox "you are updating " & strRecipeName & "recipe"
+     'MsgBox "you are updating " & strRecipeName & "recipe"
     ' ==============================================================
     ' 3. DATABASE CONNECTION
     ' ==============================================================
@@ -1098,11 +1157,19 @@ Private Sub updateToSql()
             recipeTagGroup.Item("recipe\Wax_Stirrer_ONSP_CYC_" & i).Value
         If i < 9 Then setWaxStirONSP = setWaxStirONSP & ", "
     Next i
-
+     
+    
+    
+     
     ' ==============================================================
     ' 5. FINAL QUERY CONCATENATION
     ' ==============================================================
     sqlQuery = "UPDATE RecipeMaster2 SET " & _
+                    "updatedBy = '" & user & "', " & _
+                     "updatedDate = GETDATE(), " & _
+                     "status = 2, " & _
+                     "version = version + 1, " & _
+                     "[Comment] = '" & Replace(comment, "'", "''") & "', " & _
                     setWaxHeatTSP & ", " & _
                     setWaxHeatONSP & ", " & _
                     setProdHeatTSP & ", " & _
@@ -1124,7 +1191,10 @@ Private Sub updateToSql()
     ' 6. EXECUTE AND CLEANUP
     ' ==============================================================
     LogDiagnosticsMessage (sqlQuery)
+    
+    'Call SaveTextToFile("C:\Users\AAPLL170\Desktop\vba sql query.txt", sqlQuery)
     conn.Execute sqlQuery
+    
 
     MsgBox "Recipe updated successfully!", vbInformation, "Success"
     LogDiagnosticsMessage "Recipe updated successfully"
@@ -1140,6 +1210,9 @@ ErrHandler:
         If conn.State = 1 Then conn.Close
         Set conn = Nothing
     End If
-
 End Sub
 
+
+Private Sub updateBtn1_Accepted(PerformerUser As String, PerformerComment As String, ApproverUser As String, ApproverComment As String)
+    Call updateRecipetoDB(PerformerUser, PerformerComment)
+End Sub
