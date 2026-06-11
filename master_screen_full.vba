@@ -200,11 +200,13 @@ If recipeTagGroup Is Nothing Then
     Set recipeTagGroup = Application.CreateTagGroup(Me.AreaName)
          
         recipeTagGroup.Add "recipe\recipeName"
+        recipeTagGroup.Add "recipe\SCADA_DATA_Batch_No"
         
          
    End If
    
     recipeTagGroup.Item("recipe\recipeName").Value = ""
+    recipeTagGroup.Item("recipe\SCADA_DATA_Batch_No").Value = ""
 End Sub
 
  
@@ -215,6 +217,49 @@ Private Sub Display_AnimationStart()
     Set recipeTagGroup = InitRecipeTagGroup
     LoadRecipeData
     
+End Sub
+Private Function FormatColumnHeader(ByVal colName As String) As String
+
+    Dim i As Integer
+    Dim result As String
+    Dim ch As String
+
+    result = ""
+
+    For i = 1 To Len(colName)
+
+        ch = Mid(colName, i, 1)
+
+        If i > 1 Then
+            If ch Like "[A-Z]" Then
+                result = result & " "
+            End If
+        End If
+
+        result = result & ch
+
+    Next i
+
+    FormatColumnHeader = UCase(result)
+
+End Function
+'------------------- save sql to text file
+Public Sub SaveTextToFile(ByVal filePath As String, ByVal textData As String)
+
+    On Error GoTo ErrHandler
+
+    Dim fileNum As Integer
+
+    fileNum = FreeFile
+
+    Open filePath For Output As #fileNum
+        Print #fileNum, textData
+    Close #fileNum
+
+    Exit Sub
+
+ErrHandler:
+    MsgBox "Error saving file: " & Err.Description
 End Sub
 '----------------load recipe data funtion
 Public Sub LoadRecipeData()
@@ -232,7 +277,7 @@ Public Sub LoadRecipeData()
         "User ID=sa;" & _
         "Password=sa;" & _
         "TrustServerCertificate=yes;"
-        sql = "SELECT recipeName,status , createdBy , createdDate ,approvedBy , approvedDate FROM recipeMaster2"
+        sql = "SELECT recipeName,status , version , createdBy , createdDate ,approvedBy , approvedDate , comment , updatedBy, updatedDate FROM recipeMaster2"
         Set Rs = conn.Execute(sql)
         recipeMasterTable.Clear
     
@@ -240,16 +285,66 @@ Public Sub LoadRecipeData()
         recipeMasterTable.Rows = 1
         recipeMasterTable.Cols = Rs.Fields.Count
         recipeMasterTable.ColWidth(0) = 2500   ' Recipe Name
-        recipeMasterTable.ColWidth(1) = 2500   ' status
+        recipeMasterTable.ColWidth(1) = 4500   ' status
+        recipeMasterTable.ColWidth(2) = 2500   ' version
         recipeMasterTable.ColWidth(2) = 2500   ' createdBy
+        
         recipeMasterTable.ColWidth(3) = 2500   ' createdDate
         recipeMasterTable.ColWidth(4) = 2500   ' approvedBy
         recipeMasterTable.ColWidth(5) = 2500   ' approvedDate
+        recipeMasterTable.ColWidth(6) = 2500   ' comment
+        recipeMasterTable.ColWidth(7) = 2500   ' updatedBy
+        recipeMasterTable.ColWidth(8) = 2500   ' updatedDate
     ' Column Names
-    For c = 0 To recipeMasterTable.Cols - 1
-        recipeMasterTable.TextMatrix(0, c) = _
-            Rs.Fields(c).Name
-    Next c
+        For c = 0 To recipeMasterTable.Cols - 1
+            recipeMasterTable.TextMatrix(0, c) = _
+            FormatColumnHeader(Rs.Fields(c).Name)
+        Next c
+        
+        '==========================
+        ' Grid Formatting
+        '==========================
+        
+        With recipeMasterTable
+        
+        ' Entire grid font size
+        .Font.Name = "Arial"
+        .Font.Size = 13
+        .Font.Bold = False
+        
+        End With
+        
+        ' Header formatting
+        For c = 0 To recipeMasterTable.Cols - 1
+        
+        recipeMasterTable.Row = 0
+        recipeMasterTable.Col = c
+        
+        recipeMasterTable.CellFontBold = True
+        recipeMasterTable.CellAlignment = flexAlignCenterCenter
+        
+        ' Purple header
+        recipeMasterTable.CellBackColor = RGB(199, 210, 232)
+        recipeMasterTable.CellForeColor = vbBlack
+        
+        Next c
+        
+        ' Data alignment (left)
+        Dim t As Long
+        
+        For t = 1 To recipeMasterTable.Rows - 1
+        
+        For c = 0 To recipeMasterTable.Cols - 1
+        
+        recipeMasterTable.Row = t
+        recipeMasterTable.Col = c
+        
+        recipeMasterTable.CellAlignment = flexAlignLeftCenter
+        
+        Next c
+        
+        Next t
+        
     If Rs.EOF Then
         LogDiagnosticsMessage _
             "No records found in RecipeMaster2Screen"
@@ -310,9 +405,9 @@ Private Function GetDisplayValue( _
                 Case 1
                     GetDisplayValue = "Approved"
                 Case 2
-                    GetDisplayValue = "Pending Approval"
+                    GetDisplayValue = "Pending Approval after Recipe Update"
                 Case 3
-                    GetDisplayValue = "Updated"
+                    GetDisplayValue = "Disabled"
                 Case Else
                     GetDisplayValue = "Unknown"
             End Select
@@ -384,13 +479,13 @@ Private Sub ViewRecipeBtn1_Press()
          
    End If
    'MsgBox "selected recipe name is : " & recipeMasterTable.TextMatrix(recipeMasterTable.Row, 0)
-   '
-   If (StrComp(recipeMasterTable.TextMatrix(recipeMasterTable.Row, 0), "recipeName", vbBinaryCompare) = 0) Then
+   
+   If (StrComp(recipeMasterTable.TextMatrix(recipeMasterTable.Row, 0), "recipeName", vbBinaryCompare) = 0) Or (StrComp(recipeMasterTable.TextMatrix(recipeMasterTable.Row, 0), "RECIPE NAME", vbBinaryCompare) = 0) Then
         MsgBox ("Please select the recipe")
    Else
     Call renderRecipeParameters(recipeMasterTable.TextMatrix(recipeMasterTable.Row, 0))
      LogDiagnosticsMessage (" getting Display RECIPE_PARAMETERS_WAX")
-    ExecuteCommand "Display RECIPE_PARAMETERS_WAX"
+    ExecuteCommand "Display RECIPE_PARAMETERS_WAXopt"
     LogDiagnosticsMessage (" getting Display RECIPE_PARAMETERS_WAX")
     'ShowDisplay "RECIPE_PARAMETERS_WAX"
    End If
@@ -402,7 +497,7 @@ Private Sub ViewRecipeBtn1_Released()
    
 End Sub
 Function renderRecipeParameters(ByVal recipeName As String)
-    MsgBox ("Render function for master screen " & recipeName)
+   ' MsgBox ("Render function for master screen " & recipeName)
     Dim conn
     Dim Rs
     Dim Field, xyz
@@ -410,7 +505,12 @@ Function renderRecipeParameters(ByVal recipeName As String)
     '--------------------------tag group loaded
     Dim recipeTagGroup As TagGroup
     Set recipeTagGroup = InitRecipeTagGroup
-   
+    
+    If IsNull(recipeName) Or Trim(recipeName) = "" Or recipeName = "RECIPE NAME" Or recipeName = "recipeName" Then
+        MsgBox "Please select a recipe", vbExclamation, "Missing Recipe"
+    Exit Function
+    End If
+    
     Set conn = New ADODB.Connection
     conn.Open _
         "Provider=MSOLEDBSQL;" & _
@@ -427,6 +527,8 @@ Function renderRecipeParameters(ByVal recipeName As String)
                "WHERE recipeName = '" & recipeName & "'"
 
     Set Rs = conn.Execute(StrQuery)
+    
+    
     'MsgBox "Recipe tag found: " & Rs, vbExclamation
     ' ==============================================================
     ' SET TAG VALUES FROM RECORDSET
