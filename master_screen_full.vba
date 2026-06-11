@@ -10,6 +10,7 @@ Private Function InitRecipeTagGroup() As TagGroup
         recipeTagGroup.Add "recipe\disable"
         recipeTagGroup.Add "recipe\recipeName"
          recipeTagGroup.Add "recipe\comment"
+         recipeTagGroup.Add "recipe\Display"
 
         ' --- Wax Heat SP TSP (Cycles 0-9) ---
         recipeTagGroup.Add "recipe\PID_Parameter_Wax_Heat_SP_TSP_Cyc_0"
@@ -277,7 +278,7 @@ Public Sub LoadRecipeData()
         "User ID=sa;" & _
         "Password=sa;" & _
         "TrustServerCertificate=yes;"
-        sql = "SELECT recipeName,status , version , createdBy , createdDate ,approvedBy , approvedDate , comment , updatedBy, updatedDate FROM recipeMaster2"
+        sql = "SELECT recipeName,status , createdBy , createdDate ,approvedBy , approvedDate , comment , updatedBy, updatedDate FROM recipeMaster2"
         Set Rs = conn.Execute(sql)
         recipeMasterTable.Clear
     
@@ -286,9 +287,7 @@ Public Sub LoadRecipeData()
         recipeMasterTable.Cols = Rs.Fields.Count
         recipeMasterTable.ColWidth(0) = 2500   ' Recipe Name
         recipeMasterTable.ColWidth(1) = 4500   ' status
-        recipeMasterTable.ColWidth(2) = 2500   ' version
         recipeMasterTable.ColWidth(2) = 2500   ' createdBy
-        
         recipeMasterTable.ColWidth(3) = 2500   ' createdDate
         recipeMasterTable.ColWidth(4) = 2500   ' approvedBy
         recipeMasterTable.ColWidth(5) = 2500   ' approvedDate
@@ -309,7 +308,7 @@ Public Sub LoadRecipeData()
         
         ' Entire grid font size
         .Font.Name = "Arial"
-        .Font.Size = 13
+        .Font.Size = 13          ' Change this for all rows
         .Font.Bold = False
         
         End With
@@ -321,11 +320,9 @@ Public Sub LoadRecipeData()
         recipeMasterTable.Col = c
         
         recipeMasterTable.CellFontBold = True
-        recipeMasterTable.CellAlignment = flexAlignCenterCenter
         
-        ' Purple header
-        recipeMasterTable.CellBackColor = RGB(199, 210, 232)
-        recipeMasterTable.CellForeColor = vbBlack
+        ' Header alignment
+        recipeMasterTable.CellAlignment = flexAlignCenterCenter
         
         Next c
         
@@ -336,10 +333,10 @@ Public Sub LoadRecipeData()
         
         For c = 0 To recipeMasterTable.Cols - 1
         
-        recipeMasterTable.Row = t
-        recipeMasterTable.Col = c
+         recipeMasterTable.Row = t
+         recipeMasterTable.Col = c
         
-        recipeMasterTable.CellAlignment = flexAlignLeftCenter
+         recipeMasterTable.CellAlignment = flexAlignLeftCenter
         
         Next c
         
@@ -473,18 +470,22 @@ End Sub
 
 Private Sub ViewRecipeBtn1_Press()
    Dim recipeTagGroup As TagGroup
-   If recipeTagGroup Is Nothing Then
-   Set recipeTagGroup = Application.CreateTagGroup(Me.AreaName)
-        recipeTagGroup.Add "recipe\recipeName"
-         
-   End If
+    Set recipeTagGroup = InitRecipeTagGroup
+    
+    recipeTagGroup.Item("recipe\recipeName").Value = recipeMasterTable.TextMatrix(recipeMasterTable.Row, 0)
    'MsgBox "selected recipe name is : " & recipeMasterTable.TextMatrix(recipeMasterTable.Row, 0)
    
    If (StrComp(recipeMasterTable.TextMatrix(recipeMasterTable.Row, 0), "recipeName", vbBinaryCompare) = 0) Or (StrComp(recipeMasterTable.TextMatrix(recipeMasterTable.Row, 0), "RECIPE NAME", vbBinaryCompare) = 0) Then
         MsgBox ("Please select the recipe")
    Else
+    
+    SaveQueryLog "Before Recipe View"
+    
     Call renderRecipeParameters(recipeMasterTable.TextMatrix(recipeMasterTable.Row, 0))
-     LogDiagnosticsMessage (" getting Display RECIPE_PARAMETERS_WAX")
+     LogDiagnosticsMessage (" getting Display RECIPE_PARAMETERS_WAXopt")
+     
+      SaveQueryLog "after Recipe View"
+      
     ExecuteCommand "Display RECIPE_PARAMETERS_WAXopt"
     LogDiagnosticsMessage (" getting Display RECIPE_PARAMETERS_WAX")
     'ShowDisplay "RECIPE_PARAMETERS_WAX"
@@ -495,6 +496,41 @@ End Sub
 Private Sub ViewRecipeBtn1_Released()
   
    
+End Sub
+
+Public Sub SaveQueryLog(ByVal logText As String)
+
+    On Error GoTo ErrHandler
+
+    Dim conn As ADODB.Connection
+    Dim sqlQuery As String
+
+    Set conn = New ADODB.Connection
+
+    conn.Open _
+        "Provider=MSOLEDBSQL;" & _
+        "Data Source=AAPL-L170\SQLEXPRESS;" & _
+        "Initial Catalog=vbaLiveProjects;" & _
+        "User ID=sa;" & _
+        "Password=sa;" & _
+        "TrustServerCertificate=yes;"
+
+    sqlQuery = "INSERT INTO checkLogTime ([condition], [datetime]) " & _
+               "VALUES ('" & Replace(logText, "'", "''") & "', GETDATE())"
+
+    conn.Execute sqlQuery
+
+CleanUp:
+    If Not conn Is Nothing Then
+        If conn.State = 1 Then conn.Close
+        Set conn = Nothing
+    End If
+    Exit Sub
+
+ErrHandler:
+    MsgBox "Error saving log: " & Err.Description, vbExclamation
+    Resume CleanUp
+
 End Sub
 Function renderRecipeParameters(ByVal recipeName As String)
    ' MsgBox ("Render function for master screen " & recipeName)
@@ -525,114 +561,156 @@ Function renderRecipeParameters(ByVal recipeName As String)
     ' ==============================================================
     StrQuery = "SELECT * from recipeMaster2 " & _
                "WHERE recipeName = '" & recipeName & "'"
-
+               
+               
+    'SaveQueryLog "Before Recipe View"
+    
     Set Rs = conn.Execute(StrQuery)
     
+    'SaveQueryLog "after Recipe view"
+    
+    
+    'LogDiagnosticsMessage "Execution Time: " & _
+                Format((Timer - StartTime) * 1000, "0.00") & " ms"
+                
     
     'MsgBox "Recipe tag found: " & Rs, vbExclamation
     ' ==============================================================
     ' SET TAG VALUES FROM RECORDSET
     ' ==============================================================
+    Dim displayValue As Integer
+    Dim i As Integer
+    
+    displayValue = recipeTagGroup.Item("recipe\Display").Value
+
+
+    
     If Rs.EOF Then
         MsgBox "Recipe not found: " & recipeName, vbExclamation
     Else
-        Do While Not Rs.EOF
-            ' --- Wax Heat SP TSP ---
-            For i = 0 To 9
-                recipeTagGroup.Item("recipe\PID_Parameter_Wax_Heat_SP_TSP_Cyc_" & i).Value = _
-                    Rs("PID_Parameter_Wax_Heat_SP_TSP_Cyc_" & i)
-            Next i
-
-            ' --- Wax Heat ONSP ---
-            For i = 0 To 9
-                recipeTagGroup.Item("recipe\PID_Parameter_Wax_Heat_ONSP_Cyc_" & i).Value = _
-                    Rs("PID_Parameter_Wax_Heat_ONSP_Cyc_" & i)
-            Next i
-
-            ' --- Product Heating TSP ---
-            For i = 0 To 9
-                recipeTagGroup.Item("recipe\Product_Heating_MFG_Heat_TSP_Cyc_" & i).Value = _
-                    Rs("Product_Heating_MFG_Heat_TSP_Cyc_" & i)
-            Next i
-
-            ' --- Product Heating ONSP ---
-            For i = 0 To 9
-                recipeTagGroup.Item("recipe\Product_Heating_MFG_Heat_ONSP_Cyc_" & i).Value = _
-                    Rs("Product_Heating_MFG_Heat_ONSP_Cyc_" & i)
-            Next i
-
-            ' --- Product Cooling TSP ---
-            For i = 0 To 9
-                recipeTagGroup.Item("recipe\Product_Cooling_MFG_Cool_TSP_CycMW1168_" & i).Value = _
-                    Rs("Product_Cooling_MFG_Cool_TSP_CycMW1168_" & i)
-            Next i
-
-            ' --- Water Heating TSP ---
-            For i = 0 To 9
-                recipeTagGroup.Item("recipe\Water_Heating_Water_Heat_TSP_Cyc_" & i).Value = _
-                    Rs("Water_Heating_Water_Heat_TSP_Cyc_" & i)
-            Next i
-
-            ' --- Water Heating ONSP ---
-            For i = 0 To 9
-                recipeTagGroup.Item("recipe\Water_Heating_Water_Heat_ONSP_Cyc_" & i).Value = _
-                    Rs("Water_Heating_Water_Heat_ONSP_Cyc_" & i)
-            Next i
-
-            ' --- Anchor Motor RPM SP ---
-            For i = 0 To 9
-                recipeTagGroup.Item("recipe\Motor_Anchor_Mtr_RPM_SP_CYC_" & i).Value = _
-                    Rs("Motor_Anchor_Mtr_RPM_SP_CYC_" & i)
-            Next i
-
-            ' --- Anchor Motor ONSP ---
-            For i = 0 To 9
-                recipeTagGroup.Item("recipe\Anchor_Motor_ONSP_Cyc_" & i).Value = _
-                    Rs("Anchor_Motor_ONSP_Cyc_" & i)
-            Next i
-
-            ' --- Homogeniser Motor RPM SP ---
-            For i = 0 To 9
-                recipeTagGroup.Item("recipe\Motor_Homoginiser_Mtr_RPM_SP_CYC_" & i).Value = _
-                    Rs("Motor_Homoginiser_Mtr_RPM_SP_CYC_" & i)
-            Next i
-
-            ' --- Homogeniser Motor ONSP ---
-            For i = 0 To 9
-                recipeTagGroup.Item("recipe\Homogeniser_Motor_ONSP_Cyc_" & i).Value = _
-                    Rs("Homogeniser_Motor_ONSP_Cyc_" & i)
-            Next i
-
-            ' --- Water Stirrer RPM SP ---
-            For i = 0 To 9
-                recipeTagGroup.Item("recipe\Motor_Water_Stirrer_Mtr_RPM_SP_CYC_" & i).Value = _
-                    Rs("Motor_Water_Stirrer_Mtr_RPM_SP_CYC_" & i)
-            Next i
-
-            ' --- Water Stirrer ONSP ---
-            For i = 0 To 9
-                recipeTagGroup.Item("recipe\Water_Heating_Water_Stirr_ONSP_CyC_" & i).Value = _
-                    Rs("Water_Heating_Water_Stirr_ONSP_CyC_" & i)
-            Next i
-
-            ' --- Wax Stirrer RPM SP ---
-            For i = 0 To 9
-                recipeTagGroup.Item("recipe\Motor_Wax_Stirrer_Mtr_RPM_SP_CYC_" & i).Value = _
-                    Rs("Motor_Wax_Stirrer_Mtr_RPM_SP_CYC_" & i)
-            Next i
-
-            ' --- Wax Stirrer ONSP ---
-            For i = 0 To 9
-                recipeTagGroup.Item("recipe\Wax_Stirrer_ONSP_CYC_" & i).Value = _
-                    Rs("Wax_Stirrer_ONSP_CYC_" & i)
-            Next i
-
-            ' --- Control Tags ---
-            recipeTagGroup.Item("recipe\status").Value = Rs("status").Value
-            recipeTagGroup.Item("recipe\disable").Value = Rs("disable").Value
-
-            Rs.MoveNext
-        Loop
+    Do While Not Rs.EOF
+    
+    Select Case displayValue
+    
+    '==========================
+    ' Display = 0 (Wax Heating)
+    '==========================
+    Case 0
+    
+    For i = 0 To 9
+    recipeTagGroup.Item("recipe\PID_Parameter_Wax_Heat_SP_TSP_Cyc_" & i).Value = _
+        Rs("PID_Parameter_Wax_Heat_SP_TSP_Cyc_" & i)
+    Next i
+    
+    For i = 0 To 9
+    recipeTagGroup.Item("recipe\PID_Parameter_Wax_Heat_ONSP_Cyc_" & i).Value = _
+        Rs("PID_Parameter_Wax_Heat_ONSP_Cyc_" & i)
+    Next i
+    
+    '==========================
+    ' Display = 1 (Water Heating)
+    '==========================
+    Case 1
+    
+    For i = 0 To 9
+    recipeTagGroup.Item("recipe\Water_Heating_Water_Heat_TSP_Cyc_" & i).Value = _
+        Rs("Water_Heating_Water_Heat_TSP_Cyc_" & i)
+    Next i
+    
+    For i = 0 To 9
+    recipeTagGroup.Item("recipe\Water_Heating_Water_Heat_ONSP_Cyc_" & i).Value = _
+        Rs("Water_Heating_Water_Heat_ONSP_Cyc_" & i)
+    Next i
+    
+    '==========================
+    ' Display = 2 (Product Heating/Cooling)
+    '==========================
+    Case 2
+    
+    For i = 0 To 9
+    recipeTagGroup.Item("recipe\Product_Heating_MFG_Heat_TSP_Cyc_" & i).Value = _
+        Rs("Product_Heating_MFG_Heat_TSP_Cyc_" & i)
+    Next i
+    
+    For i = 0 To 9
+    recipeTagGroup.Item("recipe\Product_Heating_MFG_Heat_ONSP_Cyc_" & i).Value = _
+        Rs("Product_Heating_MFG_Heat_ONSP_Cyc_" & i)
+    Next i
+    
+    For i = 0 To 9
+    recipeTagGroup.Item("recipe\Product_Cooling_MFG_Cool_TSP_CycMW1168_" & i).Value = _
+        Rs("Product_Cooling_MFG_Cool_TSP_CycMW1168_" & i)
+    Next i
+    
+    '==========================
+    ' Display = 3 (Anchor Motor)
+    '==========================
+    Case 3
+    
+    For i = 0 To 9
+    recipeTagGroup.Item("recipe\Motor_Anchor_Mtr_RPM_SP_CYC_" & i).Value = _
+        Rs("Motor_Anchor_Mtr_RPM_SP_CYC_" & i)
+    Next i
+    
+    For i = 0 To 9
+    recipeTagGroup.Item("recipe\Anchor_Motor_ONSP_Cyc_" & i).Value = _
+        Rs("Anchor_Motor_ONSP_Cyc_" & i)
+    Next i
+    
+    '==========================
+    ' Display = 4 (Homogeniser)
+    '==========================
+    Case 4
+    
+    For i = 0 To 9
+    recipeTagGroup.Item("recipe\Motor_Homoginiser_Mtr_RPM_SP_CYC_" & i).Value = _
+        Rs("Motor_Homoginiser_Mtr_RPM_SP_CYC_" & i)
+    Next i
+    
+    For i = 0 To 9
+    recipeTagGroup.Item("recipe\Homogeniser_Motor_ONSP_Cyc_" & i).Value = _
+        Rs("Homogeniser_Motor_ONSP_Cyc_" & i)
+    Next i
+    
+    '==========================
+    ' Display = 5 (Water Stirrer)
+    '==========================
+    Case 5
+    
+    For i = 0 To 9
+    recipeTagGroup.Item("recipe\Motor_Water_Stirrer_Mtr_RPM_SP_CYC_" & i).Value = _
+        Rs("Motor_Water_Stirrer_Mtr_RPM_SP_CYC_" & i)
+    Next i
+    
+    For i = 0 To 9
+    recipeTagGroup.Item("recipe\Water_Heating_Water_Stirr_ONSP_CyC_" & i).Value = _
+        Rs("Water_Heating_Water_Stirr_ONSP_CyC_" & i)
+    Next i
+    
+    '==========================
+    ' Display = 6 (Wax Stirrer)
+    '==========================
+    Case 6
+    
+    For i = 0 To 9
+    recipeTagGroup.Item("recipe\Motor_Wax_Stirrer_Mtr_RPM_SP_CYC_" & i).Value = _
+        Rs("Motor_Wax_Stirrer_Mtr_RPM_SP_CYC_" & i)
+    Next i
+    
+    For i = 0 To 9
+    recipeTagGroup.Item("recipe\Wax_Stirrer_ONSP_CYC_" & i).Value = _
+        Rs("Wax_Stirrer_ONSP_CYC_" & i)
+    Next i
+    
+    End Select
+    
+    ' Always update control tags
+    recipeTagGroup.Item("recipe\status").Value = Rs("status").Value
+    recipeTagGroup.Item("recipe\disable").Value = Rs("disable").Value
+    
+    Rs.MoveNext
+    
+    Loop
     End If
 
     ' --- Recipe name written to tag regardless of DB result ---
